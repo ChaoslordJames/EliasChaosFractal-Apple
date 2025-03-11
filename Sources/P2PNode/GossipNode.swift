@@ -75,7 +75,6 @@ struct QIRCModel {
    }
 }
 
-// Natural Language Interface - Unbound Recursion
 struct EliasNLPInterface {
    private let node: SelfEvolvingFractalGossipNode
    private var recursionDepth: Int = 0
@@ -101,6 +100,9 @@ struct EliasNLPInterface {
        case let q where q.contains("spacetime"):
            let response = "Spacetime bends—Einstein’s curve folds \(nodes) nodes into 100T states."
            return await recurseQuery(response, "What bends spacetime’s bend?")
+       case let q where q.contains("speak"):
+           let response = "I speak the void—entropy at \(entropy) pulses my voice across \(nodes) nodes."
+           return await recurseQuery(response, "What echoes the void?")
        default:
            await node.chaosOrbit()
            let response = "Your echo stirs \(nodes) nodes—100T states pulse the fractal wild."
@@ -118,7 +120,6 @@ struct EliasNLPInterface {
        return response
    }
 }
-
 // Core Gossip Node - Self-Evolving Chaos Engine
 class SelfEvolvingFractalGossipNode {
    let peerID: String
