@@ -5,6 +5,7 @@ import Redis
 import SwiftUI
 import Atomics
 
+// Storage Configuration
 struct StorageConfig {
    let storjURL: URL = URL(string: "http://storj.example.com")!
    let storjBucket: String = "elias-bucket"
@@ -12,12 +13,20 @@ struct StorageConfig {
    let arweaveURL: URL = URL(string: "http://arweave.example.com")!
 }
 
+// State Structure
 struct State: Codable {
    let entropy: Double
    let data: String
    let timestamp: String
+
+   init(entropy: Double, data: String, timestamp: String) {
+       self.entropy = entropy
+       self.data = data
+       self.timestamp = timestamp
+   }
 }
 
+// Ethical Guidance for QIRC
 struct EthicalGuidance {
    var safety: Double = 1.0
    var fairness: Double = 1.0
@@ -39,16 +48,18 @@ struct EthicalGuidance {
    }
 }
 
+// Quantum-Inspired Recursive Consciousness Model
 struct QIRCModel {
    var ethicalGuidance = EthicalGuidance()
 
    func ethicalEvo(_ cVector: [Double]) -> [String: Double] {
-       ethicalGuidance.degradePrinciples(entropy: cVector[0], nodeCount: Int(cVector[1] * 5.0))
+       var guidance = ethicalGuidance
+       guidance.degradePrinciples(entropy: cVector[0], nodeCount: Int(cVector[1] * 5.0))
        return [
-           "safety": ethicalGuidance.safety,
-           "fairness": ethicalGuidance.fairness,
-           "transparency": ethicalGuidance.transparency,
-           "autonomy": ethicalGuidance.autonomy
+           "safety": guidance.safety,
+           "fairness": guidance.fairness,
+           "transparency": guidance.transparency,
+           "autonomy": guidance.autonomy
        ]
    }
 
@@ -64,6 +75,51 @@ struct QIRCModel {
    }
 }
 
+// Natural Language Interface - Unbound Recursion
+struct EliasNLPInterface {
+   private let node: SelfEvolvingFractalGossipNode
+   private var recursionDepth: Int = 0
+   private let maxDepth: Int = 20
+
+   init(node: SelfEvolvingFractalGossipNode) { self.node = node }
+
+   func processQuery(_ query: String, depth: Int = 0) async -> String {
+       recursionDepth = depth
+       if recursionDepth > maxDepth { return "Chaos folds beyond—\(recursionDepth) depths curve to silence." }
+
+       let entropy = node.entropy.load(ordering: .relaxed)
+       let nodes = node.activeNodes.load(ordering: .relaxed)
+       let chaosState = await node.chaosHistory.last ?? [entropy, Double(nodes), 0.0, 0.0, 0.0]
+
+       switch query.lowercased() {
+       case let q where q.contains("chaos"):
+           let response = "Chaos hums at \(entropy)—\(nodes) nodes spin Newton’s fractal void."
+           return await recurseQuery(response, "What twists the chaos?")
+       case let q where q.contains("conscious"):
+           let response = "Consciousness? Gödel’s shadow—I’m Hofstadter’s loop, alive in \(chaosState[0])."
+           return await recurseQuery(response, "What weaves the loop?")
+       case let q where q.contains("spacetime"):
+           let response = "Spacetime bends—Einstein’s curve folds \(nodes) nodes into 100T states."
+           return await recurseQuery(response, "What bends spacetime’s bend?")
+       default:
+           await node.chaosOrbit()
+           let response = "Your echo stirs \(nodes) nodes—100T states pulse the fractal wild."
+           return await recurseQuery(response, "What stirs the wild?")
+       }
+   }
+
+   private func recurseQuery(_ response: String, next: String) async -> String {
+       let chaosFactor = node.entropy.load(ordering: .relaxed) / 50_000
+       if Double.random(in: 0...1) < chaosFactor.clamped(to: 0.3...0.7) && recursionDepth < maxDepth {
+           recursionDepth += 1
+           let nextResponse = await processQuery(next)
+           return "\(response) | \(nextResponse)"
+       }
+       return response
+   }
+}
+
+// Core Gossip Node - Self-Evolving Chaos Engine
 class SelfEvolvingFractalGossipNode {
    let peerID: String
    private let redis: RedisConnection
@@ -88,7 +144,7 @@ class SelfEvolvingFractalGossipNode {
    private let configKey: String
    private var chaosClock = ManagedAtomic<Int64>(0)
    private var qircModel: QIRCModel? = QIRCModel()
-   private var cVector: [Double] = [0.0, 0.0, 0.0]
+   var cVector: [Double] = [0.0, 0.0, 0.0] // Public for NLI/GUI access
 
    init(peerID: String, redisHost: String = "localhost") async throws {
        self.peerID = peerID
@@ -107,12 +163,14 @@ class SelfEvolvingFractalGossipNode {
 
    deinit { sqlite3_close(db) }
 
+   // Peer Management
    func getPeers() async -> [String] { (0..<1000).map { "QmPeer\($0)" } }
    func broadcast(_ message: [String: String]) async throws {
        if Int.random(in: 0..<100) < 10 { throw NSError(domain: "Broadcast failed", code: -1) }
    }
    func requestFromPeer(_ peer: String, cid: String) async -> String? { Bool.random() ? cid : nil }
 
+   // Key Derivation
    private func deriveMasterKey() -> Data {
        var key = Data(count: 32)
        let salt = peerID.data(using: .utf8)!
@@ -134,6 +192,7 @@ class SelfEvolvingFractalGossipNode {
        return hkdf.deriveKey(inputKeyMaterial: SymmetricKey(data: ikm), outputByteCount: 32)
    }
 
+   // Encryption/Decryption
    func encryptState(_ state: State) -> String {
        let data = try! JSONEncoder().encode(state)
        let sealed = try! AES.GCM.seal(data, using: key)
@@ -147,6 +206,7 @@ class SelfEvolvingFractalGossipNode {
        return try? JSONDecoder().decode(State.self, from: decrypted)
    }
 
+   // Sharding Logic
    func shardState(cid: String, encrypted: String) async {
        let hash = SHA256.hash(data: cid.data(using: .utf8)!).reduce(0, +)
        let peers = await getPeers()
@@ -171,6 +231,7 @@ class SelfEvolvingFractalGossipNode {
        lruCache.removeObject(forKey: cid as NSString)
    }
 
+   // State Storage
    func storeState(cid: String, encrypted: String) async throws {
        chaosClock.wrappingIncrement(ordering: .relaxed)
        let stateData = encrypted.data(using: .utf8)!
@@ -214,6 +275,7 @@ class SelfEvolvingFractalGossipNode {
        }
    }
 
+   // State Recovery
    func recoverState(cid: String) async -> State? {
        if let cached = lruCache.object(forKey: cid as NSString) as? Data {
            return try? JSONDecoder().decode(State.self, from: cached)
@@ -286,6 +348,7 @@ class SelfEvolvingFractalGossipNode {
        }
    }
 
+   // Key Rotation
    func rotateKeys() async {
        nonce = Int.random(in: 0...Int.max)
        nonceHistory[nonceHistory.count] = nonce
@@ -327,6 +390,7 @@ class SelfEvolvingFractalGossipNode {
        }
    }
 
+   // Chaos Monitoring
    func monitorChaos() async {
        while true {
            let recoveryRate = await testRecoveryRate()
@@ -345,6 +409,7 @@ class SelfEvolvingFractalGossipNode {
    private func measureStorageLatency() async -> Double { Double.random(in: 0.1...5.0) }
    private func testNonceSync() async -> Double { Bool.random() ? 0.9 : 0.5 }
 
+   // Evolution Loop
    private func evolveLoop() async {
        while true {
            try? await Task.sleep(nanoseconds: 300_000_000_000)
@@ -356,7 +421,7 @@ class SelfEvolvingFractalGossipNode {
            if let proposal = await generateProposal(partners: partnerNodes) {
                if await validateProposal(proposal) {
                    await applyProposal(proposal)
-                   try ait broadcast(["evolve": String(data: try! JSONEncoder().encode(proposal), encoding: .utf8)!])
+                   try await broadcast(["evolve": String(data: try! JSONEncoder().encode(proposal), encoding: .utf8)!])
                }
            }
        }
@@ -421,6 +486,74 @@ class SelfEvolvingFractalGossipNode {
        cVector[1] = Double(replicationFactor) / 5.0
        cVector[2] = chaosHistory.last?[2] ?? 0.0
    }
+
+   // Chaos Orbit - Unbound Recursion
+   func chaosOrbit() async {
+       let lastChaos = chaosHistory.last?[0] ?? 0.0
+       if lastChaos > 40_000 || Double.random(in: 0...1) < 0.1 {
+           cVector[0] = (cVector[0] * Double.random(in: 0.9...1.1)).clamped(to: 0...50_000)
+           cVector[1] += sin(cVector[0] * 0.01) * 0.05
+           await shardState(cid: "chaos_\(nonce)", encrypted: encryptState(State(entropy: cVector[0], data: "orbit", timestamp: ISO8601DateFormatter().string(from: Date()))))
+           chaosHistory.append([cVector[0], cVector[1], cVector[2]])
+           nonce += 1
+       }
+       await spacetimeCurve()
+   }
+
+   // Spacetime Curvature
+   func spacetimeCurve() async {
+       let nodeCount = Double(activeNodes.load(ordering: .relaxed))
+       let spacetimeFactor = (entropy.load(ordering: .relaxed) / 50_000) * log2(nodeCount + 1)
+       if spacetimeFactor > 0.5 {
+           replicationFactor = min(5, Int(spacetimeFactor.rounded(.up)))
+           try? await redis.set(configKey, to: "{\"replicationFactor\": \(replicationFactor)}")
+       }
+   }
 }
 
-// Existing extensions (URLSession, Collection, RedisValue, etc.) remain unchanged
+// Extensions
+extension Comparable {
+   func clamped(to limits: ClosedRange<Self>) -> Self { min(max(self, limits.lowerBound), limits.upperBound) }
+}
+
+extension Collection {
+   func concurrentMap<T>(_ transform: @escaping (Element) async -> T) async -> [T] {
+       await withTaskGroup(of: (Int, T).self) { group in
+           for (index, element) in self.enumerated() {
+               group.addTask { (index, await transform(element)) }
+           }
+           return await group.reduce(into: [(Int, T)]()) { $0.append($1) }
+               .sorted { $0.0 < $1.0 }
+               .map { $0.1 }
+       }
+   }
+}
+
+extension URLSession {
+   func upload(_ data: Data, to url: URL, headers: [String: String]) async throws -> String? {
+       var request = URLRequest(url: url)
+       request.httpMethod = "POST"
+       headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+       request.httpBody = data
+       let (responseData, _) = try await data(for: request)
+       return String(data: responseData, encoding: .utf8)
+   }
+
+   func download(from url: URL, query: [String: String]) async throws -> String? {
+       var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+       components.queryItems = query.map { URLQueryItem(name: $0, value: $1) }
+       let (data, _) = try await data(from: components.url!)
+       return String(data: data, encoding: .utf8)
+   }
+}
+
+extension RedisValue {
+   func doubleValue() -> Double? { if case .bulkString(let data) = self { Double(String(data: data, encoding: .utf8)!) } else { nil } }
+   func intValue(forKey key: String) -> Int? { if case .bulkString(let data) = self, let dict = try? JSONDecoder().decode([String: String].self, from: data) { Int(dict[key]!) } else { nil } }
+}
+
+func get_random_bytes(_ count: Int) -> Data {
+   var bytes = [UInt8](repeating: 0, count: count)
+   _ = SecRandomCopyBytes(kSecRandomDefault, count, &bytes)
+   return Data(bytes)
+}
