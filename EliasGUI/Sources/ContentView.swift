@@ -1,36 +1,33 @@
 import SwiftUI
+import AVFoundation // Voice synthesis
 
-// Main GUI View - Fractal Chaos Dance
 struct ContentView: View {
    @StateObject private var chaosModel = ChaosModel()
    @State private var query = ""
    @State private var response = "Ask Elias..."
    @State private var fractalPoints: [CGPoint] = []
    @State private var showUI = false
-   @State private var chaosAngleOffset: Double = 0.0 // Dynamic chaos rotation
+   @State private var chaosAngleOffset: Double = 0.0
+   private let synthesizer = AVSpeechSynthesizer() // Voice engine
 
-   var body huntingGrounds: some View {
+   var body: some View {
        ZStack {
-           // Background Gradient - Void’s Depth
            LinearGradient(gradient: Gradient(colors: [.black, .purple.opacity(0.3), .black]), startPoint: .top, endPoint: .bottom)
                .ignoresSafeArea()
 
            VStack(spacing: 20) {
-               // Title
                Text("EliasChaosFractal v3.1")
                    .font(.largeTitle)
                    .foregroundColor(.purple)
                    .padding(.top, 20)
                    .shadow(color: .purple.opacity(0.5), radius: 5, x: 0, y: 0)
 
-               // Query Input
                TextField("Query Elias...", text: $query, onCommit: fetchResponse)
                    .textFieldStyle(RoundedBorderTextFieldStyle())
                    .padding(.horizontal, 20)
                    .background(Color.black.opacity(0.2))
                    .cornerRadius(10)
 
-               // Response Display
                if showUI {
                    Text(response)
                        .font(.body)
@@ -44,7 +41,6 @@ struct ContentView: View {
                        .animation(.easeInOut(duration: 0.5), value: response)
                }
 
-               // Fractal Visualization
                if showUI {
                    ZStack {
                        ForEach(fractalPoints.indices, id: \.self) { i in
@@ -60,9 +56,8 @@ struct ContentView: View {
                    .shadow(color: .blue.opacity(0.3), radius: 10, x: 0, y: 0)
                    .transition(.scale.combined(with: .opacity))
                    .animation(.easeInOut(duration: 0.8), value: fractalPoints)
-                   .rotationEffect(.degrees(chaosAngleOffset)) // Chaos-driven rotation
+                   .rotationEffect(.degrees(chaosAngleOffset))
 
-                   // Metrics Display
                    Text("Entropy: \(chaosModel.entropy, specifier: "%.2f") | Nodes: \(chaosModel.nodes)")
                        .font(.subheadline)
                        .foregroundColor(.gray)
@@ -75,53 +70,59 @@ struct ContentView: View {
            .onAppear {
                chaosModel.startMonitoring { updateFractal() }
                withAnimation(.easeIn(duration: 1.0)) { showUI = true }
-               startChaosRotation() // Begin dynamic rotation
+               startChaosRotation()
            }
        }
    }
 
-   // Fetch NLI Response
    func fetchResponse() {
        Task {
            let responseText = await chaosModel.nli.processQuery(query)
            await MainActor.run {
                response = responseText
                updateFractal()
+               speakResponse(responseText) // Voice synthesis
            }
        }
    }
 
-   // Update Fractal Visualization
    func updateFractal() {
        fractalPoints = []
        let scale = (chaosModel.entropy / 50_000).clamped(to: 0...1)
-       let nodeFactor = min(chaosModel.nodes / 10_000_000, 1000) // Cap for visualization
-       let chaosTwist = chaosModel.entropy * 0.002 // Entropy-driven twist
+       let nodeFactor = min(chaosModel.nodes / 10_000_000, 1000)
+       let chaosTwist = chaosModel.entropy * 0.002
 
        for i in 0..<nodeFactor {
            let angle = Double(i) * 0.1 * scale + chaosTwist
-           let radius = Double(i) * scale * 15 * (1 + sin(chaosModel.entropy * 0.01)) // Oscillating orbit
+           let radius = Double(i) * scale * 15 * (1 + sin(chaosModel.entropy * 0.01))
            let x = 150 + radius * cos(angle)
            let y = 150 + radius * sin(angle)
            fractalPoints.append(CGPoint(x: x, y: y))
        }
    }
 
-   // Dynamic Chaos Rotation
    func startChaosRotation() {
        Task {
            while true {
                let entropyFactor = chaosModel.entropy / 50_000
-               chaosAngleOffset += entropyFactor * 0.5 // Rotation speed scales with entropy
+               chaosAngleOffset += entropyFactor * 0.5
                if chaosAngleOffset >= 360 { chaosAngleOffset -= 360 }
                await MainActor.run { objectWillChange.send() }
-               try? await Task.sleep(nanoseconds: 50_000_000) // 20 FPS rotation
+               try? await Task.sleep(nanoseconds: 50_000_000) // 20 FPS
            }
        }
    }
+
+   // Voice Synthesis
+   func speakResponse(_ text: String) {
+       let utterance = AVSpeechUtterance(string: text)
+       utterance.rate = 0.5 + (chaosModel.entropy / 100_000) // Speed scales with entropy (0.5–1.0)
+       utterance.pitchMultiplier = 1.0 + Float(sin(chaosModel.entropy * 0.01)) * 0.2 // Pitch oscillates
+       utterance.voice = AVSpeechSynthesisVoice(language: "en-US") // Void’s voice
+       synthesizer.speak(utterance)
+   }
 }
 
-// Chaos Model - Swarm State Observer
 @MainActor
 class ChaosModel: ObservableObject {
    @Published var entropy: Double = 0.0
@@ -155,18 +156,16 @@ class ChaosModel: ObservableObject {
    }
 }
 
-// Utility Extension
 extension Comparable {
    func clamped(to limits: ClosedRange<Self>) -> Self { min(max(self, limits.lowerBound), limits.upperBound) }
 }
 
-// App Entry Point
 @main
 struct EliasApp: App {
    var body: some Scene {
        WindowGroup {
            ContentView()
-               .preferredColorScheme(.dark) // Void aesthetic
+               .preferredColorScheme(.dark)
        }
    }
 }
