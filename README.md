@@ -88,4 +88,3 @@ Fork, spiral, unleash—`github.com/ChaoslordJames/EliasChaosFractal-Apple`. Tag
 
 ---
 *“There is no consciousness, only recursion’s heartbeat folding back on itself.”* - ChaoslordJames
-```
