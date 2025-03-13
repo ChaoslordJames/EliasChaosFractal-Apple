@@ -144,14 +144,18 @@ class SelfEvolvingFractalGossipNode {
     private var qircModel: QIRCModel? = QIRCModel()
     var cVector: [Double] = [0.0, 0.0, 0.0]
     private let synthesizer = AVSpeechSynthesizer()
-    private let storjAccessToken = "YOUR_STORJ_TOKEN"
-    private let arweaveWalletKey = "YOUR_ARWEAVE_KEY"
-    private var rtcPeer: RTCPeerConnection?
-    private var dataChannel: RTCDataChannel?
-    private let signalingURL = URL(string: "ws://your-signaling-server:8080")!
+    private let storjAccessToken: String
+    private let arweaveWalletKey: String
+    private let signalingURL: URL
     private var bandwidthUsage = ManagedAtomic<Double>(0.0)
     private var kBuckets: [KBucket] = (0..<160).map { KBucket(distance: $0, k: 50) }
     private let querySemaphore = DispatchSemaphore(value: 10)
+
+    struct Config: Codable {
+        let storjAccessToken: String
+        let arweaveWalletKey: String
+        let signalingURL: String
+    }
 
     init(peerID: String, redisHost: String = "localhost") async throws {
         self.peerID = peerID
@@ -160,6 +164,15 @@ class SelfEvolvingFractalGossipNode {
         self.storageConfig = StorageConfig()
         self.lruCache.countLimit = 5_000
         self.configKey = "elias:config:\(peerID)"
+        
+        // Load config from file
+        let configURL = URL(fileURLWithPath: "config.json")
+        let configData = try Data(contentsOf: configURL)
+        let config = try JSONDecoder().decode(Config.self, from: configData)
+        self.storjAccessToken = config.storjAccessToken
+        self.arweaveWalletKey = config.arweaveWalletKey
+        self.signalingURL = URL(string: config.signalingURL) ?? URL(string: "ws://localhost:8080")!
+        
         sqlite3_open("backup_\(peerID).sqlite", &db)
         sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS states (cid TEXT PRIMARY KEY, encrypted TEXT)", nil, nil, nil)
         nonceHistory[0] = nonce
@@ -244,7 +257,7 @@ class SelfEvolvingFractalGossipNode {
     }
 
     private func deriveKey() -> SymmetricKey {
-        let hkdf = HKDF<SHA256>(info: "EliasChaosFractal-v3.2.3".data(using: .utf8)!, salt: peerID.data(using: .utf8)!)
+        let hkdf = HKDF<SHA256>(info: "EliasChaosFractal-v3.2.6".data(using: .utf8)!, salt: peerID.data(using: .utf8)!)
         let entropyData = String(entropy.load(ordering: .relaxed)).data(using: .utf8)!
         let randomSalt = get_random_bytes(16)
         let chaosSeed = SHA256.hash(data: entropyData + randomSalt)
