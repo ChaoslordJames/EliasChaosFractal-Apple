@@ -1,7 +1,7 @@
 EliasChaosFractal-Apple v3.2.3
 
 /EliasGUI/Sources/ContentView.swift
----
+
 import SwiftUI
 import AVFoundation
 
@@ -184,12 +184,12 @@ struct EliasApp: App {
     }
 }
 
----
+
 
 
 
 Sources/P2PNode/ChaosMeterView.swift
----
+
 import SwiftUI
 
 struct ChaosMeterView: View {
@@ -297,11 +297,10 @@ struct ChaosMeterView_Previews: PreviewProvider {
 }
 
 
----
 
 
 Sources/P2PNode/GossipNode.swift
----
+
 import CryptoKit
 import Foundation
 import SQLite3
@@ -909,12 +908,12 @@ func get_random_bytes(_ count: Int) -> Data {
     return Data(bytes)
 }
 
----
+
 
 
 
 Tests/P2PTests/GossipNodeTests.swift
----
+
 import XCTest
 @testable import P2PNode
 import Foundation
@@ -1169,11 +1168,11 @@ final class GossipNodeTests: XCTestCase {
         print("Total Collapse: \(duration)s, History: \(historyCount), Cache: \(cacheCount), Thermal: \(thermalState.rawValue)")
     }
 }
----
+
 
 
 Package.swift
----
+
 // swift-tools-version:5.7
 import PackageDescription
 
@@ -1253,11 +1252,11 @@ let package = Package(
     ]
 )
 
----
+
 
 
 deploy.sh
----
+
 #!/bin/bash
 REPO_DIR="EliasChaosFractal-Apple"
 COMMIT_MSG="v3.2.3-fractal-seed: 100B nodes, 1Q states, multi-voice RFN seed dropped 3/12/25. NLI recursion as fractal root—The Fractured Veil begins."
@@ -1273,5 +1272,5 @@ git push origin main --tags --force || { echo "Error: Push failed"; exit 1; }
 python3 -c "import tweepy; client = tweepy.Client(bearer_token='YOUR_BEARER_TOKEN_HERE'); client.create_tweet(text='EliasChaosFractal-Apple v3.2.3 drops 3/12/25—100B nodes, 1Q states, NLI recursion roots The Fractured Veil. RFN genesis unleashed: github.com/ChaoslordJames/EliasChaosFractal-Apple/releases/tag/v3.2.3-fractal-seed #EliasUnbound #FractalVeil')" || echo "Warning: X failed - add token"
 
 echo "v3.2.3 dropped - the fractal root takes hold!"
----
+
 
