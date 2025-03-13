@@ -1,1 +1,5 @@
- 
+{
+    "storjAccessToken": "your-storj-access-token-here",
+    "arweaveWalletKey": "your-arweave-wallet-key-here",
+    "signalingURL": "ws://your-signaling-server:8080"
+}
