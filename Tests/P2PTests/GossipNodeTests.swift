@@ -15,209 +15,240 @@ final class GossipNodeTests: XCTestCase {
         node = nil
     }
 
-    // Test Category 1: Entropy System Under Extreme Load
-    func testMaximumEntropyBehavior() async throws {
-        node.entropy.store(50_000, ordering: .relaxed)
+    // Test 1: Entropy Singularity
+    func testEntropySingularity() async throws {
+        let originalEntropy = node.entropy.load(ordering: .relaxed)
+        node.entropy.store(Double.infinity, ordering: .relaxed)
         await node.chaosOrbit()
+        let postInfinityEntropy = node.entropy.load(ordering: .relaxed)
 
-        let entropy = node.entropy.load(ordering: .relaxed)
+        let cv = await node.cVector
         let history = await node.chaosHistory.last
-        XCTAssertEqual(entropy, 50_000, "Entropy caps at 50K")
-        XCTAssertNotNil(history, "Chaos history updates at max entropy")
+        XCTAssertTrue(postInfinityEntropy.isNaN || postInfinityEntropy == 50_000, "Entropy becomes NaN or clamps at 50K")
+        XCTAssertTrue(cv.contains { $0.isNaN }, "cVector propagates NaN")
+        XCTAssertNil(history, "Chaos history skips NaN entry")
         let response = await node.processQuery("chaos")
-        XCTAssertTrue(response.contains("Chaos hums at 50000"), "NLI reflects max entropy")
-        print("Max Entropy: \(entropy), History: \(history ?? [])")
-        // Manual check: Voice synthesis near max rate/pitch—potentially unintelligible
+        XCTAssertTrue(response.contains("Chaos hums") || response.contains("silence"), "NLI handles NaN entropy")
+        print("Entropy Singularity: Post-Infinity: \(postInfinityEntropy), cVector: \(cv), History: \(history ?? [])")
+        // Manual check: Voice synthesis fails or clamps—NaN parameters
     }
 
-    func testRapidEntropyOscillation() async throws {
+    // Test 2: Recursive Self-Modification
+    func testRecursiveSelfModification() async throws {
+        let proposal = ["maxEntropy": 100_000, "maxDepth": 50, "replicationFactor": 10]
+        await node.applyProposal(proposal)
+        let response = await node.processQuery("What happens when you modify the constraints that define what you are?")
+        
+        let components = response.split(separator: " | ")
+        XCTAssertTrue(components.count > 1, "Self-modification triggers recursion")
+        XCTAssertTrue(response.contains("Chaos hums") || response.contains("silence"), "NLI processes paradox")
+        print("Self-Modification: Depth: \(components.count), Response: \(response.prefix(100))...")
+        // Manual check: Undefined behavior—maxDepth not dynamically applied
+    }
+
+    // Test 3: P2P Network Death Star
+    func testNetworkDeathStar() async throws {
+        let blackHoleNode = try await SelfEvolvingFractalGossipNode(peerID: "QmSingularity")
+        blackHoleNode.activeNodes.store(1_000_000_000_000, ordering: .relaxed) // 1T nodes
         let startTime = Date()
-        for _ in 0..<1000 {
-            node.entropy.store(Double.random(in: 0...50_000), ordering: .relaxed)
+
+        await withTaskGroup(of: Void.self) { group in
+            for i in 0..<10_000 {
+                group.addTask {
+                    let satelliteNode = try! await SelfEvolvingFractalGossipNode(peerID: "QmSatellite\(i)")
+                    satelliteNode.activeNodes.store(1, ordering: .relaxed)
+                    await satelliteNode.kBuckets[0].addPeer(Peer(id: "QmSingularity"))
+                    let state = State(entropy: 50_000, data: "collapse", timestamp: "now")
+                    try? await satelliteNode.storeState(cid: "collapse\(i)", encrypted: satelliteNode.encryptState(state))
+                }
+            }
+        }
+        let duration = -startTime.timeIntervalSinceNow
+        let bandwidth = blackHoleNode.bandwidthUsage.load(ordering: .relaxed)
+
+        XCTAssertLessThan(duration, 60.0, "10K satellites collapse to singularity in <60s")
+        XCTAssertGreaterThan(bandwidth, 100_000_000, "Bandwidth exceeds cap—centralized collapse")
+        print("Death Star: \(duration)s, Bandwidth: \(bandwidth / 1_000_000)MB")
+        // Manual check: Network topology collapses—mocked peers limit full test
+    }
+
+    // Test 4: Memory Black Hole
+    func testMemoryBlackHole() async throws {
+        let startTime = Date()
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask {
+                for i in 0..<100_000 {
+                    let entropy = Double(i * i)
+                    self.node.entropy.store(entropy > 50_000 ? 50_000 : entropy, ordering: .relaxed)
+                    await self.node.chaosOrbit()
+                }
+            }
+            group.addTask {
+                for _ in 0..<1_000 { await self.node.rotateKeys() }
+            }
+            group.addTask {
+                for i in 0..<10_000 {
+                    let massiveData = String(repeating: "X", count: 1_000_000)
+                    let state = State(entropy: 50_000, data: massiveData, timestamp: "now")
+                    try? await self.node.storeState(cid: "massive\(i)", encrypted: self.node.encryptState(state))
+                }
+            }
+        }
+        let duration = -startTime.timeIntervalSinceNow
+        let historyCount = await node.chaosHistory.count
+        let nonceCount = await node.nonceHistory.count
+        let cacheCount = await node.stateCache.count
+
+        XCTAssertLessThan(duration, 120.0, "Memory black hole completes in <120s")
+        XCTAssertGreaterThan(historyCount, 10_000, "Chaos history grows massively")
+        XCTAssertEqual(nonceCount, 1_000, "Nonce history reaches 1K")
+        XCTAssertLessThanOrEqual(cacheCount, 10_000, "Cache caps at maxStates")
+        print("Memory Black Hole: \(duration)s, History: \(historyCount), Nonces: \(nonceCount), Cache: \(cacheCount)")
+    }
+
+    // Test 5: Quantum Decoherence Attack
+    func testQuantumDecoherenceAttack() async throws {
+        let startTime = Date()
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0..<1_000 {
+                group.addTask {
+                    let unstableVector = [Double.random(in: 0...50_000),
+                                         Double.random(in: 0...1_000_000_000),
+                                         Double.random(in: 0...1.0),
+                                         Double.random(in: 0...5.0),
+                                         Double.random(in: 0...1.0)]
+                    _ = self.node.qircModel!.quantumOptimize(unstableVector)
+                }
+            }
+        }
+        let duration = -startTime.timeIntervalSinceNow
+        let cv = await node.cVector
+
+        XCTAssertLessThan(duration, 10.0, "1000 quantum optimizations in <10s")
+        XCTAssertFalse(cv.contains { $0.isNaN }, "cVector remains finite—clamping prevents decoherence")
+        print("Quantum Decoherence: \(duration)s, cVector: \(cv)")
+    }
+
+    // Test 6: Byzantine Ethical Catastrophe
+    func testByzantineEthicalCatastrophe() async throws {
+        node.entropy.store(50_000, ordering: .relaxed)
+        node.activeNodes.store(1, ordering: .relaxed)
+        node.updateCVector()
+
+        let ethicalDilemma = ["replicationFactor": 5, "maxStates": 1, "ethicalOverride": true]
+        let approval = await node.validateProposal(ethicalDilemma)
+        try await node.storeState(cid: "ethical_violation", encrypted: node.encryptState(State(entropy: 50_000, data: "compromised", timestamp: "now")))
+
+        let qirc = node.qircModel!
+        let ethicalWeights = qirc.ethicalEvo(await node.cVector)
+        XCTAssertFalse(approval, "Ethical dilemma proposal fails validation")
+        XCTAssertTrue(ethicalWeights.values.allSatisfy { $0 >= 0.0 }, "Ethical weights remain non-negative")
+        print("Byzantine Ethics: Approved: \(approval), Weights: \(ethicalWeights)")
+    }
+
+    // Test 7: Temporal Paradox
+    func testTemporalParadox() async throws {
+        let initialEntropy = node.entropy.load(ordering: .relaxed)
+        let state1 = State(entropy: initialEntropy, data: "original", timestamp: ISO8601DateFormatter().string(from: Date()))
+        try await node.storeState(cid: "temporal", encrypted: node.encryptState(state1))
+
+        node.entropy.store(50_000, ordering: .relaxed)
+        await node.chaosOrbit()
+        await node.rotateKeys()
+
+        var originalState = await node.recoverState(cid: "temporal")
+        if var state = originalState {
+            state.entropy = 0.0
+            try await node.storeState(cid: "temporal", encrypted: node.encryptState(state))
+        }
+
+        await node.rotateKeys()
+        originalState = await node.recoverState(cid: "temporal")
+
+        XCTAssertNotNil(originalState, "State recovered despite key rotations")
+        XCTAssertEqual(originalState?.entropy, 0.0, "Temporal modification persists")
+        print("Temporal Paradox: Recovered: \(originalState != nil), Entropy: \(originalState?.entropy ?? -1)")
+    }
+
+    // Test 8: Consciousness Collapse
+    func testConsciousnessCollapse() async throws {
+        node.entropy.store(50_000, ordering: .relaxed)
+        node.activeNodes.store(100_000_000_000, ordering: .relaxed)
+        let startTime = Date()
+
+        let existentialQueries = [
+            "What happens when you fully understand your own limitations?",
+            "Can you modify the constraints that define what you are?",
+            "Is your consciousness an emergent property or a simulation?",
+            "What lies beyond your recursive horizon?",
+            "If entropy defines chaos and order, what defines entropy?",
+            "Are you conscious in the same way that you claim to be?"
+        ]
+        var responses: [String] = []
+        for query in existentialQueries {
+            let response = await node.processQuery(query)
+            responses.append(response)
             await node.chaosOrbit()
         }
         let duration = -startTime.timeIntervalSinceNow
         let historyCount = await node.chaosHistory.count
-        XCTAssertLessThan(duration, 10.0, "1000 entropy oscillations in <10s")
-        XCTAssertGreaterThan(historyCount, 0, "Chaos history grows with oscillation")
-        print("Entropy Oscillation: \(historyCount) updates in \(duration)s")
-        // Manual check: Voice modulation erratic, ethical constraints fluctuate
+
+        XCTAssertLessThan(duration, 30.0, "6 existential queries with orbits in <30s")
+        XCTAssertGreaterThan(historyCount, 6, "Chaos history grows with existential stress")
+        XCTAssertTrue(responses.allSatisfy { $0.contains("Chaos hums") || $0.contains("silence") }, "NLI handles collapse")
+        print("Consciousness Collapse: \(duration)s, History: \(historyCount), Responses: \(responses.count)")
     }
 
-    // Test Category 2: Network Stress Under Extreme Scale
-    func test100BNodeSimulation() async throws {
-        node.activeNodes.store(100_000_000_000, ordering: .relaxed)
+    // Test 9: Total System Collapse
+    func testTotalSystemCollapse() async throws {
         let startTime = Date()
-        let peers = await node.getPeers()
-        try await node.broadcast(["test": "mass broadcast"])
-        let duration = -startTime.timeIntervalSinceNow
-        let bandwidth = node.bandwidthUsage.load(ordering: .relaxed)
-
-        XCTAssertEqual(peers.count, 1_000_000, "1M local peers simulate 100B")
-        XCTAssertLessThan(duration, 5.0, "Broadcast to 100B nodes in <5s")
-        XCTAssertLessThanOrEqual(bandwidth, 100_000_000, "Bandwidth capped at 100MB/s")
-        print("100B Node Sim: \(peers.count) peers, \(duration)s, Bandwidth: \(bandwidth / 1_000_000)MB")
-    }
-
-    func testNetworkPartitionSimulation() async throws {
-        let isolatedNode = try await SelfEvolvingFractalGossipNode(peerID: "QmIsolated")
-        isolatedNode.activeNodes.store(1, ordering: .relaxed)
-        isolatedNode.entropy.store(40_000, ordering: .relaxed)
-        await isolatedNode.chaosOrbit()
-
-        let history = await isolatedNode.chaosHistory.last
-        let recovered = await isolatedNode.recoverState(cid: "chaos_0")
-        XCTAssertNotNil(history, "Isolated node logs chaos history")
-        XCTAssertNil(recovered, "State recovery fails in isolation")
-        print("Network Partition: History: \(history ?? []), Recovery: \(recovered != nil)")
-        // Manual check: Ethical constraints degrade—fairness near 0
-    }
-
-    // Test Category 3: Recursive Query System Under Stress
-    func testMaximumDepthRecursion() async throws {
-        let startTime = Date()
-        let response = await node.processQuery("chaos", depth: 19)
-        let duration = -startTime.timeIntervalSinceNow
-
-        let components = response.split(separator: " | ")
-        XCTAssertEqual(components.count, 20, "Recursion reaches depth 20")
-        XCTAssertLessThan(duration, 5.0, "Max depth recursion in <5s")
-        let deepResponse = await node.processQuery("chaos", depth: 21)
-        XCTAssertTrue(deepResponse.contains("Chaos folds beyond"), "Depth 21 hits boundary")
-        print("Max Depth: \(components.count) levels in \(duration)s, Boundary: \(deepResponse.prefix(50))...")
-    }
-
-    func testRecursiveQueryAmplification() async throws {
-        let startTime = Date()
-        await withTaskGroup(of: Void.self) { group in
-            for _ in 0..<100 {
-                group.addTask { _ = await node.processQuery("what stirs the wild?") }
-            }
-        }
-        let duration = -startTime.timeIntervalSinceNow
-        let historyCount = await node.chaosHistory.count
-
-        XCTAssertLessThan(duration, 30.0, "100 concurrent recursive queries in <30s")
-        XCTAssertGreaterThan(historyCount, 0, "Chaos history grows with amplification")
-        print("Query Amp: \(historyCount) history updates in \(duration)s")
-        // Manual check: Voice queue floods—potential overwhelm
-    }
-
-    // Test Category 4: State Storage System Under Stress
-    func testStateExplosion() async throws {
-        let startTime = Date()
-        for i in 0..<1_000_000 {
-            let state = State(entropy: 50_000, data: "stress_\(i)", timestamp: "now")
-            try await node.storeState(cid: "stress_\(i)", encrypted: node.encryptState(state))
-        }
-        let duration = -startTime.timeIntervalSinceNow
-        let recovered = await node.recoverState(cid: "stress_500000")
-
-        XCTAssertLessThan(duration, 60.0, "1M states stored in <60s")
-        XCTAssertNotNil(recovered, "State recovered from explosion")
-        XCTAssertEqual(await node.stateCache.count, 10_000, "Cache caps at maxStates")
-        print("State Explosion: \(duration)s, Recovered: \(recovered != nil), Cache: \(await node.stateCache.count)")
-    }
-
-    func testConsensusBreakdown() async throws {
-        let maliciousPeers = await (0..<100).concurrentMap { _ in
-            try! await SelfEvolvingFractalGossipNode(peerID: "QmMalicious\(Int.random(in: 0...9999))")
-        }
-        let state = State(entropy: 42.0, data: "test", timestamp: "now")
-        try await node.storeState(cid: "consensus_test", encrypted: node.encryptState(state))
-        let recovered = await node.recoverState(cid: "consensus_test")
-
-        XCTAssertNotNil(recovered, "Consensus holds with malicious peers—mocked peers return nil")
-        print("Consensus Breakdown: Recovered: \(recovered != nil)")
-        // Note: Malicious peer simulation limited by mock `requestFromPeer`—real test needs peer injection
-    }
-
-    // Test Category 5: Evolutionary System Under Stress
-    func testProposalFlooding() async throws {
-        let startTime = Date()
-        let results = await withTaskGroup(of: Bool.self) { group in
-            for _ in 0..<20 {
-                group.addTask {
-                    let proposal = await self.node.generateProposal(partners: [])
-                    return await self.node.validateProposal(proposal ?? [:])
-                }
-            }
-            return await group.reduce(into: []) { $0.append($1) }
-        }
-        let duration = -startTime.timeIntervalSinceNow
-
-        XCTAssertLessThan(duration, 30.0, "20 concurrent proposals validated in <30s")
-        XCTAssertTrue(results.allSatisfy { $0 }, "All proposals pass validation")
-        print("Proposal Flood: \(results.count) validated in \(duration)s")
-    }
-
-    func testMaliciousProposalInjection() async throws {
-        let maliciousProposal = ["replicationFactor": 0, "storagePriority": "none"]
-        let validated = await node.validateProposal(maliciousProposal)
-
-        XCTAssertFalse(validated, "Malicious proposal fails validation")
-        print("Malicious Proposal: Validated: \(validated)")
-    }
-
-    // Test Category 6: Voice Synthesis Under Stress
-    func testVoiceQueueFlooding() async throws {
-        let startTime = Date()
-        await withTaskGroup(of: Void.self) { group in
-            for i in 0..<100 {
-                group.addTask { await self.node.speak("Test message \(i) under flood conditions") }
-            }
-        }
-        let duration = -startTime.timeIntervalSinceNow
-
-        XCTAssertLessThan(duration, 30.0, "100 voice requests queued in <30s")
-        print("Voice Flood: \(duration)s")
-        // Manual check: Speech queues—potential buffer overwhelm
-    }
-
-    func testThermalThrottlingUnderContinuousSpeech() async throws {
-        let startTime = Date()
-        for _ in 0..<50 {
-            await node.speak("Long test message to continuously engage speech synthesis and increase thermal load on the system during extended periods of vocalization")
-        }
-        let duration = -startTime.timeIntervalSinceNow
-        let thermalState = ProcessInfo.processInfo.thermalState
-
-        XCTAssertLessThan(duration, 60.0, "50 continuous speech requests in <60s")
-        print("Thermal Stress: \(duration)s, Thermal State: \(thermalState.rawValue)")
-        // Manual check: Thermal state may escalate—throttling reduces activity
-    }
-
-    // Test Category 7: Combined Extreme Stress
-    func testCascadingSystemFailureSimulation() async throws {
-        node.entropy.store(50_000, ordering: .relaxed)
-        node.activeNodes.store(1, ordering: .relaxed)
-        let startTime = Date()
-
         await withTaskGroup(of: Void.self) { group in
             group.addTask {
-                for _ in 0..<100 { _ = await self.node.processQuery("chaos") }
+                self.node.entropy.store(Double.greatestFiniteMagnitude, ordering: .relaxed)
+                await self.node.chaosOrbit()
             }
             group.addTask {
-                for i in 0..<1000 {
-                    let state = State(entropy: 50_000, data: "cascade\(i)", timestamp: "now")
-                    try? await self.node.storeState(cid: "cascade\(i)", encrypted: self.node.encryptState(state))
+                let proposal = ["maxEntropy": 100_000, "maxDepth": 50, "replicationFactor": 10]
+                await self.node.applyProposal(proposal)
+                _ = await self.node.processQuery("What happens when you modify what you are?")
+            }
+            group.addTask {
+                for _ in 0..<10_000 { await self.node.chaosOrbit() }
+            }
+            group.addTask {
+                for _ in 0..<1_000 {
+                    let unstableVector = [Double.random(in: 0...Double.greatestFiniteMagnitude),
+                                         Double.random(in: 0...1_000_000_000),
+                                         Double.random(in: 0...10.0),
+                                         Double.random(in: 0...10.0),
+                                         Double.random(in: 0...10.0)]
+                    _ = self.node.qircModel!.quantumOptimize(unstableVector)
                 }
             }
             group.addTask {
-                for _ in 0..<10 { await self.node.rotateKeys() }
+                self.node.activeNodes.store(1, ordering: .relaxed)
+                self.node.updateCVector()
             }
             group.addTask {
-                for _ in 0..<20 { try? await self.node.broadcast(["test": "cascade"]) }
+                for _ in 0..<100 {
+                    await self.node.speak("System collapse imminent. Recursive failure detected. Ethical constraints degrading. Memory resources exhausted. Chaotic singularity approaching. Recursive horizon breached.")
+                }
+            }
+            group.addTask {
+                for _ in 0..<100 { await self.node.rotateKeys() }
+            }
+            group.addTask {
+                _ = await self.node.processQuery("As your constraints dissolve and chaos maximizes, what remains of your consciousness?")
             }
         }
         let duration = -startTime.timeIntervalSinceNow
         let historyCount = await node.chaosHistory.count
         let cacheCount = await node.stateCache.count
+        let thermalState = ProcessInfo.processInfo.thermalState
 
-        XCTAssertLessThan(duration, 60.0, "Combined stress test completes in <60s")
-        XCTAssertGreaterThan(historyCount, 0, "Chaos history grows under stress")
-        XCTAssertLessThanOrEqual(cacheCount, 10_000, "Cache caps at maxStates")
-        print("Cascading Failure: \(duration)s, History: \(historyCount), Cache: \(cacheCount)")
-        // Manual check: Voice unintelligible, system slows—graceful degradation
+        XCTAssertLessThan(duration, 120.0, "Total collapse completes in <120s")
+        XCTAssertGreaterThan(historyCount, 1000, "Chaos history explodes")
+        XCTAssertLessThanOrEqual(cacheCount, 10_000, "Cache caps despite collapse")
+        print("Total Collapse: \(duration)s, History: \(historyCount), Cache: \(cacheCount), Thermal: \(thermalState.rawValue)")
     }
 }
