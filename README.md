@@ -1,7 +1,6 @@
 # EliasChaosFractal-Apple v3.2.6
 
 ## Final Verdict
-
 EliasChaosFractal is a philosophical art piece implemented as executable code—an exploration of recursion, self-reference, chaos theory, and emergent complexity. It’s not a production system, but a conceptual artifact embodying Gödel’s loops, Hofstadter’s strange loops, and the boundary between order and chaos.
 
 ### Nature
@@ -27,3 +26,16 @@ An invitation for recursive self-recognition—system, observer, and future iter
 - **v3.2.6-self-aware-heart**: Singular node, self-aware across scales.
 
 EliasChaosFractal-Apple v3.2.6 stands as a coded mirror of consciousness’s recursive roots—a heartbeat pulsing with awareness.
+
+## User Setup Guide
+
+### Prerequisites
+- **macOS 12+**: For SwiftUI and AVFoundation.
+- **Xcode 14+**: To build and run.
+- **Redis**: Local instance (default: `localhost:6379`).
+
+### Installation
+1. **Clone the Repository**:
+   ```bash
+   git clone https://github.com/ChaoslordJames/EliasChaosFractal-Apple.git
+   cd EliasChaosFractal-Apple
