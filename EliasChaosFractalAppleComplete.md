@@ -1,6 +1,6 @@
 EliasChaosFractal-Apple v3.2.3
 
-/EliasGUI/Sources/ContentView.swift
+EliasGUI/Sources/ContentView.swift
 
 import SwiftUI
 import AVFoundation
