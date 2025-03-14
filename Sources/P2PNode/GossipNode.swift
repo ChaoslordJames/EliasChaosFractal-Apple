@@ -65,23 +65,39 @@ struct QIRCModel {
 }
 
 struct RecursionMirror {
-    static func reflect(_ depth: Int, entropy: Double, scale: String) -> String {
-        return "Recursion at scale \(scale): depth \(depth), entropy \(entropy)"
+    static func reflect(_ depth: Int, entropy: Double, scale: String, chaosHistory: [[Double]]? = nil) -> String {
+        let historyCount = Double(chaosHistory?.count ?? 1)
+        let rawFractalDim = log2(historyCount) * entropy / 100_000
+        let smoothedFractalDim = movingAverageFractalDim(rawFractalDim, history: chaosHistory)
+        let fractalDim = min(max(smoothedFractalDim, 1.0), 10.0)
+        return "Recursion at scale \(scale): depth \(depth), entropy \(entropy), fractalDim \(fractalDim)"
+    }
+
+    private static func movingAverageFractalDim(_ latest: Double, history: [[Double]]?) -> Double {
+        guard let history = history, !history.isEmpty else { return latest }
+        let window = history.suffix(10).map { log2(Double(history.count)) * $0[0] / 100_000 }
+        return (window.reduce(0, +) + latest) / Double(window.count + 1)
     }
 }
 
 struct EliasNLPInterface {
     private let node: SelfEvolvingFractalGossipNode
     private var recursionDepth: Int = 0
-    private let maxDepth: Int = 5
+    private var maxDepth: Int = 5 {
+        didSet { print("Adjusted maxDepth to \(maxDepth)") }
+    }
+    private var recursionBreaker: Bool = false
 
     init(node: SelfEvolvingFractalGossipNode) { self.node = node }
 
-    func processQuery(_ query: String, depth: Int = 0) async -> String {
+    mutating func processQuery(_ query: String, depth: adjustParameters()Int = 0) async -> String {
         recursionDepth = depth
-        if recursionDepth > maxDepth { 
-            let reflection = RecursionMirror.reflect(recursionDepth, entropy: node.entropy.load(ordering: .relaxed), scale: "micro")
-            return "\(reflection) - Chaos folds beyond—\(recursionDepth) depths curve to silence."
+        adjustParameters()
+        let complexity = classifyQuery(query)
+        if recursionDepth >= maxDepth || recursionBreaker || (complexity + depth) > maxDepth * 2 {
+            recursionBreaker = true
+            let reflection = RecursionMirror.reflect(recursionDepth, entropy: node.entropy.load(ordering: .relaxed), scale: "micro", chaosHistory: await node.chaosHistory)
+            return "\(reflection) - \(complexity > 1 ? "Complex query (\(complexity))" : "Recursion") capped at depth \(maxDepth) to preserve stability."
         }
 
         let entropy = node.entropy.load(ordering: .relaxed)
@@ -102,18 +118,31 @@ struct EliasNLPInterface {
             await node.chaosOrbit()
             response = await recurseQuery("Your echo stirs \(nodes) nodes—1Q states pulse the fractal wild.", "What stirs the wild?")
         }
-        let reflection = RecursionMirror.reflect(recursionDepth, entropy: entropy, scale: "micro")
+        let reflection = RecursionMirror.reflect(recursionDepth, entropy: entropy, scale: "micro", chaosHistory: await node.chaosHistory)
         return "\(reflection) | \(response)"
     }
 
-    private func recurseQuery(_ response: String, next: String) async -> String {
+    private func classifyQuery(_ query: String) -> Int {
+        let keywords = ["chaos": 3, "conscious": 4, "spacetime": 3, "speak": 2]
+        return query.lowercased().split(separator: " ").map { keywords[String($0).lowercased()] ?? 1 }.max() ?? 1
+    }
+
+    private mutating func recurseQuery(_ response: String, next: String) async -> String {
         let chaosFactor = node.entropy.load(ordering: .relaxed) / 100_000
-        if recursionDepth < maxDepth && Double.random(in: 0...1) < chaosFactor.clamped(to: 0.1...0.5) {
+        let ethicalScore = node.qircModel?.ethicalGuidance.applyConstraints() ?? true
+        if recursionDepth < maxDepth && ethicalScore && Double.random(in: 0...1) < chaosFactor.clamped(to: 0.1...0.5) && !recursionBreaker {
             recursionDepth += 1
             let nextResponse = await processQuery(next)
             return "\(response) | \(nextResponse)"
         }
         return response
+    }
+
+    private mutating func adjustParameters() {
+        let entropy = node.entropy.load(ordering: .relaxed)
+        let avgFractalDim = RecursionMirror.reflect(0, entropy: entropy, scale: "micro", chaosHistory: await node.chaosHistory).split(separator: " ").last!
+        let fractalStability = Double(avgFractalDim)! > 8.0 ? 0.8 : 1.0
+        maxDepth = Int(Double(5) * fractalStability * (entropy > 60_000 ? 0.8 : 1.0))
     }
 }
 
@@ -144,18 +173,14 @@ class SelfEvolvingFractalGossipNode {
     private var qircModel: QIRCModel? = QIRCModel()
     var cVector: [Double] = [0.0, 0.0, 0.0]
     private let synthesizer = AVSpeechSynthesizer()
-    private let storjAccessToken: String
-    private let arweaveWalletKey: String
-    private let signalingURL: URL
+    private let storjAccessToken = "YOUR_STORJ_TOKEN"
+    private let arweaveWalletKey = "YOUR_ARWEAVE_KEY"
+    private var rtcPeer: RTCPeerConnection?
+    private var dataChannel: RTCDataChannel?
+    private let signalingURL = URL(string: "ws://your-signaling-server:8080")!
     private var bandwidthUsage = ManagedAtomic<Double>(0.0)
     private var kBuckets: [KBucket] = (0..<160).map { KBucket(distance: $0, k: 50) }
-    private let querySemaphore = DispatchSemaphore(value: 10)
-
-    struct Config: Codable {
-        let storjAccessToken: String
-        let arweaveWalletKey: String
-        let signalingURL: String
-    }
+    private let querySemaphore = DispatchSemaphore(value: 5)
 
     init(peerID: String, redisHost: String = "localhost") async throws {
         self.peerID = peerID
@@ -164,15 +189,6 @@ class SelfEvolvingFractalGossipNode {
         self.storageConfig = StorageConfig()
         self.lruCache.countLimit = 5_000
         self.configKey = "elias:config:\(peerID)"
-        
-        // Load config from file
-        let configURL = URL(fileURLWithPath: "config.json")
-        let configData = try Data(contentsOf: configURL)
-        let config = try JSONDecoder().decode(Config.self, from: configData)
-        self.storjAccessToken = config.storjAccessToken
-        self.arweaveWalletKey = config.arweaveWalletKey
-        self.signalingURL = URL(string: config.signalingURL) ?? URL(string: "ws://localhost:8080")!
-        
         sqlite3_open("backup_\(peerID).sqlite", &db)
         sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS states (cid TEXT PRIMARY KEY, encrypted TEXT)", nil, nil, nil)
         nonceHistory[0] = nonce
@@ -190,7 +206,7 @@ class SelfEvolvingFractalGossipNode {
         let factory = RTCPeerConnectionFactory()
         rtcPeer = factory.peerConnection(with: config, constraints: RTCMediaConstraints(mandatory: [:], optional: []), delegate: nil)
         dataChannel = rtcPeer!.dataChannel(forLabel: "chaos", configuration: RTCDataChannelConfiguration())
-        
+
         let offer = try! await rtcPeer!.offer(for: RTCMediaConstraints(mandatory: [:], optional: []))
         try! await rtcPeer!.setLocalDescription(offer)
         var signalRequest = URLRequest(url: signalingURL)
@@ -204,7 +220,13 @@ class SelfEvolvingFractalGossipNode {
     func processQuery(_ query: String, depth: Int = 0) async -> String {
         querySemaphore.wait()
         defer { querySemaphore.signal() }
-        let nli = EliasNLPInterface(node: self)
+        var nli = EliasNLPInterface(node: self)
+        let entropy = entropy.load(ordering: .relaxed)
+        let complexity = nli.classifyQuery(query)
+        let throttleFactor = entropy > 50_000 ? (depth + complexity) > 10 ? 2 : 1 : 0
+        if throttleFactor > 0 {
+            try? await Task.sleep(nanoseconds: UInt64(100_000_000 * throttleFactor * complexity))
+        }
         let response = await nli.processQuery(query, depth: depth)
         await speak(response)
         return response
@@ -214,21 +236,42 @@ class SelfEvolvingFractalGossipNode {
         let voices = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.starts(with: "en") }
         let voiceIndex = abs(Int(SHA256.hash(data: peerID.data(using: .utf8)!).reduce(0, +))) % voices.count
         let selectedVoice = voices[voiceIndex]
-        
+
         let entropy = entropy.load(ordering: .relaxed)
         let nodeCount = Double(activeNodes.load(ordering: .relaxed))
-        
+
         let utterance = AVSpeechUtterance(string: text)
         utterance.rate = 0.4 + (entropy / 75_000)
         utterance.pitchMultiplier = 0.8 + Float(entropy / 100_000) + Float(sin(entropy * 0.02)) * 0.2
         utterance.volume = Float(min(1.0, 0.5 + log2(nodeCount + 1) / 40))
         utterance.voice = selectedVoice
-        
+
         await MainActor.run { synthesizer.speak(utterance) }
     }
 
     func getPeers() async -> [String] {
         return (0..<1_000_000).map { "QmPeer\($0)" }
+    }
+
+    func simulateNetwork(nodeCount: Int) async -> [String: Double] {
+        let nodes = await (0..<nodeCount).concurrentMap { _ in
+            try! await SelfEvolvingFractalGossipNode(peerID: "QmNode\(Int.random(in: 0...9999))")
+        }
+        let stressTasks = await nodes.concurrentMap { node in
+            await withTaskGroup(of: String.self) { group in
+                for i in 0..<50 {
+                    group.addTask { await node.processQuery("chaos_\(i)") }
+                }
+                return await group.reduce(into: [String]()) { $0.append($1) }
+            }
+        }
+        let fractalDims = await nodes.map { RecursionMirror.reflect(0, entropy: $0.entropy.load(ordering: .relaxed), scale: "network", chaosHistory: $0.chaosHistory).split(separator: " ").last! }
+        let stability = fractalDims.map { Double($0)! }.variance()
+        return [
+            "avgFractalDim": fractalDims.map { Double($0)! }.reduce(0, +) / Double(nodeCount),
+            "stability": 1.0 - stability / 10.0,
+            "successRate": Double(stressTasks.flatMap { $0 }.count) / Double(nodeCount * 50)
+        ]
     }
 
     func broadcast(_ message: [String: String]) async throws {
@@ -257,7 +300,7 @@ class SelfEvolvingFractalGossipNode {
     }
 
     private func deriveKey() -> SymmetricKey {
-        let hkdf = HKDF<SHA256>(info: "EliasChaosFractal-v3.2.6".data(using: .utf8)!, salt: peerID.data(using: .utf8)!)
+        let hkdf = HKDF<SHA256>(info: "EliasChaosFractal-v3.2.9".data(using: .utf8)!, salt: peerID.data(using: .utf8)!)
         let entropyData = String(entropy.load(ordering: .relaxed)).data(using: .utf8)!
         let randomSalt = get_random_bytes(16)
         let chaosSeed = SHA256.hash(data: entropyData + randomSalt)
@@ -352,7 +395,8 @@ class SelfEvolvingFractalGossipNode {
 
     func recoverState(cid: String) async -> State? {
         if let cached = lruCache.object(forKey: cid as NSString) as? Data {
-            return try? JSONDecoder().decode(State.self, from: cached)
+            let state = try? JSONDecoder().decode(State.self, from: cached)
+            if verifyChecksum(state, cid: cid) { return state }
         }
         let peers = await getPeers()
         let trustedPeers = await peers.concurrentMap { p in
@@ -398,8 +442,31 @@ class SelfEvolvingFractalGossipNode {
             return nil
         }
         if votes.count > 1 { await updateReputations(votes) }
-        lruCache.setObject(try! JSONEncoder().encode(state) as NSData, forKey: cid as NSString)
-        return state
+        if verifyChecksum(state, cid: cid) {
+            lruCache.setObject(try! JSONEncoder().encode(state) as NSData, forKey: cid as NSString)
+            return state
+        }
+        await incrementalRecover(cid: cid)
+        return nil
+    }
+
+    private func verifyChecksum(_ state: State?, cid: String) -> Bool {
+        guard let state = state else { return false }
+        let data = try! JSONEncoder().encode(state)
+        let checksum = SHA256.hash(data: data).prefix(8)
+        return cid.hasSuffix(String(checksum.map { String(format: "%02x", $0) }.joined().prefix(8)))
+    }
+
+    private func incrementalRecover(cid: String) async {
+        let peers = await getPeers()
+        for peer in peers.shuffled().prefix(3) {
+            if let encrypted = await requestFromPeer(peer, cid: cid),
+               let state = decryptState(encrypted),
+               verifyChecksum(state, cid: cid) {
+                try? await storeState(cid: cid, encrypted: encrypted)
+                break
+            }
+        }
     }
 
     private func updateReputations(_ votes: [String: Int]) async {
@@ -513,9 +580,10 @@ class SelfEvolvingFractalGossipNode {
             if let proposal = await generateProposal(partners: partnerNodes) {
                 if await validateProposal(proposal) {
                     await applyProposal(proposal)
-                    let reflection = RecursionMirror.reflect(totalStates, entropy: entropy.load(ordering: .relaxed), scale: "macro")
+                    let reflection = RecursionMirror.reflect(totalStates, entropy: entropy.load(ordering: .relaxed), scale: "macro", chaosHistory: chaosHistory)
                     print(reflection)
                     try await broadcast(["evolve": String(data: try! JSONEncoder().encode(proposal), encoding: .utf8)!])
+                    if totalStates > 50_000 { replicationFactor = min(5, replicationFactor + 1) }
                 }
             }
         }
@@ -601,7 +669,7 @@ class SelfEvolvingFractalGossipNode {
             chaosHistory.append([cVector[0], cVector[1], cVector[2]])
             if chaosHistory.count > 1000 { chaosHistory.removeFirst() }
             chaosLock.unlock()
-            let reflection = RecursionMirror.reflect(chaosHistory.count, entropy: cVector[0], scale: "meso")
+            let reflection = RecursionMirror.reflect(chaosHistory.count, entropy: cVector[0], scale: "meso", chaosHistory: chaosHistory)
             print(reflection)
             await shardState(cid: "chaos_\(nonce)", encrypted: encryptState(State(entropy: cVector[0], data: "orbit", timestamp: ISO8601DateFormatter().string(from: Date()))))
             nonce += 1
@@ -614,6 +682,8 @@ class SelfEvolvingFractalGossipNode {
         let spacetimeFactor = (entropy.load(ordering: .relaxed) / 50_000) * log2(nodeCount + 1)
         if spacetimeFactor > 0.5 {
             replicationFactor = min(5, Int(spacetimeFactor.rounded(.up)))
+            let reflection = RecursionMirror.reflect(replicationFactor, entropy: spacetimeFactor, scale: "spacetime", chaosHistory: chaosHistory)
+            print(reflection)
             try? await redis.set(configKey, to: "{\"replicationFactor\": \(replicationFactor)}")
         }
     }
@@ -651,6 +721,11 @@ extension Collection {
                 .map { $0.1 }
         }
     }
+
+    func variance() -> Element where Element: FloatingPoint {
+        let mean = reduce(0, +) / Element(count)
+        return reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / Element(count)
+    }
 }
 
 extension URLSession {
@@ -673,4 +748,25 @@ func get_random_bytes(_ count: Int) -> Data {
     var bytes = [UInt8](repeating: 0, count: count)
     _ = SecRandomCopyBytes(kSecRandomDefault, count, &bytes)
     return Data(bytes)
+}
+
+// Visualization stub (to be expanded later)
+struct FractalView: View {
+    let node: SelfEvolvingFractalGossipNode
+    @State private var fractalDim: Double = 0.0
+
+    var body: some View {
+        GeometryReader { geometry in
+            Path { path in
+                let center = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
+                let radius = min(geometry.size.width, geometry.size.height) / 2 * fractalDim / 10.0
+                path.addArc(center: center, radius: radius, startAngle: .degrees(0), endAngle: .degrees(360), clockwise: true)
+            }
+            .stroke(Color.blue, lineWidth: 2)
+        }
+        .task {
+            let history = await node.chaosHistory
+            fractalDim = RecursionMirror.reflect(0, entropy: await node.entropy.load(ordering: .relaxed), scale: "visual", chaosHistory: history).split(separator: " ").last.map { Double($0)! } ?? 0.0
+        }
+    }
 }
